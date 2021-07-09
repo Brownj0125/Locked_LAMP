@@ -1,20 +1,22 @@
 ---
-####################################
-#  This playbook is designed for:  #
-#    Host: CentOS-8                #
-#      Ansible Version: 2.9.21     #
-####################################
+#####################################################
+#  This playbook is designed for:                   #
+#    Host: CentOS-8                                 #
+#      Ansible Version: 2.9.23                      #
+#    Vault Command:                                 #
+# ansible-playbook Locked_LAMP.yml --ask-vault-pass #
+#####################################################
 
 - hosts: digitalocean
   gather_facts: false
   
   vars:
-    do_token: "{{ lookup('file', '~/DO_Token.txt') }}"
+    do_token: "{{ lookup('file', '~/testDO_Token.txt') }}"
     ssh_key_name: Jacob-Brown-2107
     my_ssh_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
     droplet_name:
       - BrownJ-2107-STIG1
-      - BrownJ-2107-STIG2
+#      - BrownJ-2107-STIG2
 
   tasks:
     - name: Register My SSH Key Into DO
@@ -53,6 +55,7 @@
     # db_user: wordpressuser
     db_pswd: Fullsail11!!
     mysql_root_password: Fullsail11!!
+    vaulted_raw_password: Fullsail11!!
 
   tasks:
     - name: Wait for Port 22 to Become Available
@@ -175,12 +178,65 @@
 #         state: restarted
 
 ## SELinux
+    # - name: SELinux Allow Apache to Modify Website Files.
+    #   command: chcon -t httpd_sys_rw_content_t /var/www/html -R
 
-    - name: SELinux Allow Apache to Modify Website Files.
-      command: chcon -t httpd_sys_rw_content_t /var/www/html -R
+    - name: SELinux Disable
+      selinux:
+        state: disabled
 
     - name: Reboot for SELinux Changes
       reboot:
         reboot_timeout: 600
+
+    - name: CAT 1 STIG Encrypt Root Password - ID V-230235 - (1/20)
+      expect:
+        command: grub2-mkpasswd-pbkdf2
+        responses:
+          Enter password: "{{vaulted_raw_password}}"
+          Reenter password: "{{vaulted_raw_password}}"
+      no_log: true
+    
+    - name: Testing STIG 
+      command: grep -iw grub2_password /boot/grub2/user.cfg
+      register: rootPass
+    - debug: 
+        msg: "(Output must be GRUB2_PASSWORD grub.pbkdf2.sha512.PASSWORD_HASH){{ rootPass.stdout }}"
+      
+    - name: CAT 1 STIG Verify Repository Certificate Signature - ID V-230264 (2/20)
+      shell: egrep '^\[.*\]|gpgcheck' /etc/yum.repos.d/*.repo
+      register: gpgcheck
+    - debug:
+        msg: "{{ gpgcheck.stdout_lines.spit(',') }}"
+    # - name: Output to file
+    #   local_action: copy content="{{ gpgcheck.stdout_line.split(',') }}" dest="~/Locked_LAMP/nodes/gpgcheck.txt"
+
+    - name: Run Test Script.
+      local_action: shell command=./gpgScript.sh
+      register: testResolt
+
+    - debug:
+        msg: "{{ testResolt }}"
+
+    - name: CAT 1 STIG Verify Local Packages Certificate Signature - ID V-230265 (3/20)
+
+    - name: CAT 1 STIG Remove All “shosts.equiv” files - ID V-230283 (4/20)
+    - name: CAT 1 STIG Remove All “.shosts” files - ID V-230284 (5/20)
+    - name: CAT 1 STIG Stop Unattended or Automatic Login - ID V-230329 (6/20)
+    - name: CAT 1 STIG Block Null Passwords - ID V-230380 (7/20)
+    - name: CAT 1 STIG Remove Telnet-Server Packages - ID V-230487 (8/20)
+    - name: CAT 1 STIG Remove RSH-Server Package - ID V-230492 (9/20)
+    - name: CAT 1 STIG Block “ctrl-alt-del” Reboot - ID V-230529 (10/20)
+    - name: CAT 1 STIG Block “ctrl-alt-del” Reboot 7 time in 2 sec - ID V-230531 (11/20)
+    - name: CAT 1 STIG Remove TFTP server - ID V-230533 (12/20)
+    - name: CAT 1 STIG Remove FTP server - ID V-230558 (13/20)
+    - name: CAT 2 STIG Configure Cat 2 STIGs (14/20)
+    - name: CAT 2 STIG Install rsyslog Remote System Log - ID V-230228 (15/20)
+    - name: CAT 2 STIG Passphrase Required for SSH Keys - ID V-230230 (16/20)
+    - name: CAT 2 STIG Encrypt All Stored Passwords - ID V-230231 (17/20)
+    - name: CAT 2 STIG Valid Root Authentication for Rescue/Emergency Mode - ID V-230236 (18/20)
+    - name: CAT 2 STIG Enable and Enforce Secure Enhanced Linux (SELinux) - ID V-230240 (19/20)
+    - name: CAT 2 STIG SSH Connection Timeout - ID V-230244 (20/20)
+    - name: CAT 2 STIG Force the use of TLSv1.2 - ID V-230255 (21/20)
 
 ...
