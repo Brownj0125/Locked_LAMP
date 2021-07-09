@@ -1,0 +1,186 @@
+---
+####################################
+#  This playbook is designed for:  #
+#    Host: CentOS-8                #
+#      Ansible Version: 2.9.21     #
+####################################
+
+- hosts: digitalocean
+  gather_facts: false
+  
+  vars:
+    do_token: "{{ lookup('file', '~/DO_Token.txt') }}"
+    ssh_key_name: Jacob-Brown-2107
+    my_ssh_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+    droplet_name:
+      - BrownJ-2107-STIG1
+      - BrownJ-2107-STIG2
+
+  tasks:
+    - name: Register My SSH Key Into DO
+      digital_ocean_sshkey:
+        oauth_token: "{{ do_token }}"
+        name: "{{ ssh_key_name }}"
+        ssh_pub_key: "{{ my_ssh_key }}"
+        state: present
+      register: mysshkey
+
+    - name: Create Two DO Droplets
+      digital_ocean_droplet: 
+        state: present
+        name: "{{ item }}"
+        oauth_token: "{{ do_token }}"
+        size: s-1vcpu-1gb
+        region: nyc1
+        unique_name: yes
+        image: centos-8-x64
+        ssh_keys: ["{{ mysshkey.data.ssh_key.id }}"]
+      with_items: "{{ droplet_name }}"
+      register: droplet_details
+
+    - name: Add The Droplets' Public IP Addresses to Memory
+      add_host:
+        name: "{{ item.data.ip_address }}"
+        groups: droplets
+      with_items: ["{{ droplet_details.results }}"]
+
+- hosts: droplets
+  remote_user: root
+  gather_facts: false
+
+  vars:
+    # db_name: wordpressdb
+    # db_user: wordpressuser
+    db_pswd: Fullsail11!!
+    mysql_root_password: Fullsail11!!
+
+  tasks:
+    - name: Wait for Port 22 to Become Available
+      wait_for:
+        host: "{{ inventory_hostname }}"
+        port: 22
+      delegate_to: localhost
+
+#########  These 3 steps are needed for PHP 7.4 not available in EPEL
+    - name: EPEL Release RPM
+      command: dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm 
+
+    - name: REMI Release RPM
+      command: dnf install -y https://rpms.remirepo.net/enterprise/remi-release-8.rpm 
+
+    - name: PHP 7.4 from REMI
+      command: dnf module install -y php:remi-7.4
+#########  Remove previous 3 steps when PHP 7.4 is available in EPEL 
+
+## OS Update
+    - name: DNF Package Manager Update
+      dnf:
+        name: "*"
+        state: latest
+
+## Web App Packages
+    - name: Installing LAMP Stack
+      dnf:
+        name:
+        - epel-release
+        - firewalld
+        - httpd
+        - mariadb-server
+        - mariadb
+#        - php  #Use this when EPEL repo is updated with version 7.4 or higher
+        - php-mysqlnd
+        - php-fpm
+        - python2
+        - python3
+        - tar
+        - curl
+        - git
+        update_cache: yes
+        state: latest
+
+    - name: Install PyMySQL With PIP
+      become: true
+      pip:
+        name: pymysql
+        state: present
+
+## Start MariaDB Service
+    - name: Start MariaDB and Enable it on Boot
+      service:
+        name: mariadb
+        state: started
+        enabled: yes
+
+## Database Security
+    - name: Create MariaDB Root Password
+      mysql_user: 
+        login_host: localhost
+        login_user: root
+        login_password: ''
+        name: root
+        password: "{{mysql_root_password}}"
+        state: present
+      ignore_errors: yes
+
+    - name: Delete Anonymous MariaDB User
+      mysql_user: 
+        login_host: localhost
+        login_user: root
+        login_password: "{{mysql_root_password}}"
+        name: ""
+        host: localhost
+        state: absent
+      no_log: true
+
+    - name: Remove MySQL Test Database
+      mysql_db: 
+        login_host: localhost
+        login_user: root
+        login_password: "{{mysql_root_password}}"
+        name: test
+        state: absent
+      no_log: true
+
+## Firewall Config
+    - name: Start Firewall and Enable it on Boot
+      service:
+        name: firewalld
+        state: started 
+        enabled: yes
+
+    - name: Open Firewall Port 80
+      firewalld:
+        zone: public
+        service: http
+        permanent: yes
+        state: enabled
+
+    - name: Open Firewall Port 22
+      firewalld:
+        zone: public
+        service: ssh
+        permanent: yes
+        state: enabled
+
+## Apache Startup and Web Hosting Setup
+    - name: Start Apache and Enable it on Boot.
+      service:
+        name: httpd
+        state: started
+        enabled: yes
+
+#     - name: Restart Apache
+#       service:
+#         name: httpd
+#         state: restarted
+
+## SELinux
+
+    - name: SELinux Allow Apache to Modify Website Files.
+      command: chcon -t httpd_sys_rw_content_t /var/www/html -R
+
+    - name: Reboot for SELinux Changes
+      reboot:
+        reboot_timeout: 600
+
+...
