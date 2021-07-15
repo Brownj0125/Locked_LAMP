@@ -3,7 +3,7 @@
 #  This playbook is designed for:                   #
 #    Host: CentOS-8                                 #
 #      Ansible Version: 2.9.23                      #
-#    Vault Command:                                 #
+#    Playbook with Vault Command:                   #
 # ansible-playbook Locked_LAMP.yml --ask-vault-pass #
 #####################################################
 
@@ -11,15 +11,18 @@
   gather_facts: false
   
   vars:
-    do_token: "{{ lookup('file', '~/testDO_Token.txt') }}"
+    do_token: "{{ lookup('file', '~/DO_Token.txt') }}"
     ssh_key_name: Jacob-Brown-2107
     my_ssh_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
     droplet_name:
       - BrownJ-2107-STIG1
-#      - BrownJ-2107-STIG2
+      - BrownJ-2107-STIG2
 
+## 1.2. Milestone 2 Start
   tasks:
-    - name: Register My SSH Key Into DO
+    - name: |
+        Task - 1.2.1.2
+              Upload SSH Key
       digital_ocean_sshkey:
         oauth_token: "{{ do_token }}"
         name: "{{ ssh_key_name }}"
@@ -27,7 +30,9 @@
         state: present
       register: mysshkey
 
-    - name: Create Two DO Droplets
+    - name: |
+        Task - 1.2.1.3
+              Create Two DO Droplets
       digital_ocean_droplet: 
         state: present
         name: "{{ item }}"
@@ -40,7 +45,9 @@
       with_items: "{{ droplet_name }}"
       register: droplet_details
 
-    - name: Add The Droplets' Public IP Addresses to Memory
+    - name: |
+        Task - 1.2.1.4.
+              Add The Droplets' Public IP Addresses to Memory
       add_host:
         name: "{{ item.data.ip_address }}"
         groups: droplets
@@ -51,11 +58,10 @@
   gather_facts: false
 
   vars:
-    # db_name: wordpressdb
-    # db_user: wordpressuser
     db_pswd: Fullsail11!!
     mysql_root_password: Fullsail11!!
     vaulted_raw_password: Fullsail11!!
+    ssh_passphrase: Fullsail11!!
 
   tasks:
     - name: Wait for Port 22 to Become Available
@@ -64,25 +70,36 @@
         port: 22
       delegate_to: localhost
 
-#########  These 3 steps are needed for PHP 7.4 not available in EPEL
-    - name: EPEL Release RPM
-      command: dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm 
-
-    - name: REMI Release RPM
-      command: dnf install -y https://rpms.remirepo.net/enterprise/remi-release-8.rpm 
-
-    - name: PHP 7.4 from REMI
-      command: dnf module install -y php:remi-7.4
-#########  Remove previous 3 steps when PHP 7.4 is available in EPEL 
-
-## OS Update
-    - name: DNF Package Manager Update
+## 1.2.2. DISA STIGs Playbook
+    - name: |
+        Task - 1.2.2.1.
+              Update and Upgrade OS
       dnf:
         name: "*"
         state: latest
 
-## Web App Packages
-    - name: Installing LAMP Stack
+## 1.2.2.2. Install Packages
+
+#########  These 3 steps are needed for PHP 7.4 not available in EPEL
+    - name: |
+        Task - 1.2.2.2.1.
+              Install EPEL RPM
+      command: dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm 
+
+    - name: |
+        Tast - 1.2.2.2.2.
+              Install REMI RPM
+      command: dnf install -y https://rpms.remirepo.net/enterprise/remi-release-8.rpm 
+
+    - name: |
+        Task - 1.2.2.2.3.
+              Install PHP 7.4 from REMI
+      command: dnf module install -y php:remi-7.4
+#########  Remove previous 3 steps when PHP 7.4 is available in EPEL 
+
+    - name: |
+        Tasks - 1.2.2.2.5. - 1.2.2.2.9.
+              Installing LAMP Stack
       dnf:
         name:
         - epel-release
@@ -101,142 +118,288 @@
         update_cache: yes
         state: latest
 
-    - name: Install PyMySQL With PIP
+    - name: |
+        Task - 1.2.2.2.10.
+              Install PyMySQL With PIP
       become: true
       pip:
         name: pymysql
         state: present
 
-## Start MariaDB Service
-    - name: Start MariaDB and Enable it on Boot
+## Task - 1.2.2.3. MariaDB
+    - name: |
+        Task - 1.2.2.3.1
+              Start MariaDB and Enable it on Boot
       service:
         name: mariadb
         state: started
         enabled: yes
 
-## Database Security
-    - name: Create MariaDB Root Password
+    - name: |
+        Task - 1.2.2.3.2.
+              Create MariaDB Root Password
       mysql_user: 
         login_host: localhost
         login_user: root
         login_password: ''
         name: root
-        password: "{{mysql_root_password}}"
+        password: "{{ mysql_root_password }}"
         state: present
       ignore_errors: yes
 
-    - name: Delete Anonymous MariaDB User
+    - name: |
+        Task - 1.2.2.3.3.
+              Remove Anonymous DB Users
       mysql_user: 
         login_host: localhost
         login_user: root
-        login_password: "{{mysql_root_password}}"
+        login_password: "{{ mysql_root_password }}"
         name: ""
         host: localhost
         state: absent
       no_log: true
 
-    - name: Remove MySQL Test Database
+    - name: |
+        Task - 1.2.2.3.4.
+              Remove Test Databases
       mysql_db: 
         login_host: localhost
         login_user: root
-        login_password: "{{mysql_root_password}}"
+        login_password: "{{ mysql_root_password }}"
         name: test
         state: absent
       no_log: true
 
-## Firewall Config
-    - name: Start Firewall and Enable it on Boot
+## Task - 1.2.2.4. Configure Firewall Ports
+    - name: |
+        Task - 1.2.2.4.1.
+              Start Firewall and Enable it on Boot
       service:
         name: firewalld
         state: started 
         enabled: yes
 
-    - name: Open Firewall Port 80
+    - name: |
+        Task - 1.2.2.4.2.
+              Open Port 80 for HTTP
       firewalld:
         zone: public
         service: http
         permanent: yes
         state: enabled
 
-    - name: Open Firewall Port 22
+    - name: |
+        Task - 1.2.2.4.3.
+              Open Port 22 for SSH
       firewalld:
         zone: public
         service: ssh
         permanent: yes
         state: enabled
 
-## Apache Startup and Web Hosting Setup
-    - name: Start Apache and Enable it on Boot.
+## 1.2.2.5. Apache
+    - name: |
+        Task - 1.2.2.5.1.
+              Start Apache and Enable it on Boot.
       service:
         name: httpd
         state: started
         enabled: yes
 
-#     - name: Restart Apache
-#       service:
-#         name: httpd
-#         state: restarted
+## 1.2.2.6. Configure Cat 1 STIGs
+    - name: |
+        Task - 1.2.2.6.1.
+              Enforce Local Packages Certificate Signature - ID V-230265
+      lineinfile:
+        path: /etc/dnf/dnf.conf
+        regexp: '^gpgcheck='
+        line: 'gpgcheck=1'
+        state: present
 
-## SELinux
-    # - name: SELinux Allow Apache to Modify Website Files.
-    #   command: chcon -t httpd_sys_rw_content_t /var/www/html -R
+    - name: |
+        Task - 1.2.2.6.2. PART 1
+              Find All “shosts.equiv” files - ID V-230283
+      find:
+        path: "/"
+        recurse: yes
+        patterns: "shosts.equiv"
+      register: shosts
 
-    - name: SELinux Disable
-      selinux:
-        state: disabled
+    - name: |
+        Task - 1.2.2.6.2. PART 2
+              Remove All “shosts.equiv” files - ID V-230283
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      with_items: "{{ shosts.files }}"
 
-    - name: Reboot for SELinux Changes
+    - name: |
+        Task - 1.2.2.6.3. PART 1
+              Find All “.shosts” files - ID V-230284
+      find:
+        path: "/"
+        recurse: yes
+        patterns: "*.shosts"
+      register: anyshosts
+
+    - name: |
+        Task - 1.2.2.6.3. PART 2
+              Remove All “.shosts” files - ID V-230284
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      with_items: "{{ anyshosts.files }}"
+
+    - name: |
+        Task - 1.2.2.6.4.
+              Remove Telnet-Server Packages - ID V-230487
+      dnf: 
+        name: telnet-server
+        state: absent
+
+    - name: |
+        Task - 1.2.2.6.5.
+              Remove RSH-Server Package - ID V-230492
+      dnf: 
+        name: rsh-server
+        state: absent
+
+    - name: |
+        Task - 1.2.2.6.6.
+              Mask “ctrl-alt-del” Reboot - ID V-230529
+      systemd:
+        name: ctrl-alt-del.target
+        masked: yes
+
+    - name: |
+        Task - 1.2.2.6.7.
+              Block “ctrl-alt-del” Burst Reboot - ID V-230531
+      lineinfile:
+        path: /etc/systemd/system.conf
+        regexp: '^CtrlAltDelBurstAction'
+        line: 'CtrlAltDelBurstAction=none'
+        state: present
+
+    - name: |
+        Task - 1.2.2.6.8.
+              Remove TFTP server - ID V-230533
+      dnf:
+        name: tftp-server
+        state: absent
+
+    - name: |
+        Task - 1.2.2.6.9.
+              Remove FTP server - ID V-230558
+      dnf:
+        name: vsftpd
+        state: absent
+
+## 1.2.2.7. Configure Cat 2 STIGs
+    - name: |
+        Task - 1.2.2.7.1. PART 1
+              Install rsyslog Remote System Log - ID V-230228
+      dnf:
+        name: rsyslog
+        state: latest
+
+    - name: |
+        Task - 1.2.2.7.1. PART 2
+              Configure rsyslog Remote System Log - ID V-230228
+      lineinfile:
+        path: /etc/rsyslog.conf
+        regexp: '^authpriv.*'
+        line: 'auth.*;authpriv.*;daemon.*               /var/log/secure'
+        state: present
+
+    - name: |
+        Task - 1.2.2.7.2.
+              Encrypt All Stored Passwords - ID V-230231
+      lineinfile:
+        path: /etc/login.defs
+        regexp: '^ENCRYPT_METHOD'
+        line: 'ENCRYPT_METHOD SHA512'
+        state: present
+
+    - name: |
+        Task - 1.2.2.7.3.
+              Valid Root Authentication for Rescue/Emergency Mode - ID V-230236
+      lineinfile:
+        path: /usr/lib/systemd/system/rescue.service
+        regexp: '^ExecStart'
+        line: 'ExecStart=-/usr/lib/systemd/systemd-sulogin-shell rescue'
+        state: present
+
+    - name: |
+        Task - 1.2.2.7.4.
+              Enable and Enforce Secure Enhanced Linux (SELinux) - ID V-230240
+      command: chcon -t httpd_sys_rw_content_t /var/www/html -R
+
+    - name: |
+        Task - 1.2.2.7.5. PART 1
+              SSH Connection Interval - ID V-230244
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#ClientAliveInterval'
+        line: 'ClientAliveInterval 600'
+        state: present
+
+    - name: |
+        Task - 1.2.2.7.5. PART 2
+              SSH Connection Max - ID V-230244
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#ClientAliveCountMax'
+        line: 'ClientAliveCountMax 0'
+        state: present
+
+    - name: |
+        Task - 1.2.2.7.6.
+              Force The Use of TLSv1.2 - ID V-230255
+      lineinfile:
+        path: /etc/crypto-policies/back-ends/opensslcnf.config
+        regexp: '^MinProtocol = TLSv1.2'
+        line: 'MinProtocol = TLSv1.2'
+        state: present
+
+
+    - name: |
+        Tasks - 1.2.2.7.7. - 1.2.2.7.9.
+              Change System Directory/File Command Permissions, Owner, and Group
+              ID V-230257 - ID: V-230258 - ID: V-230259
+      file:
+        path: "{{ item }}"
+        owner: root
+        group: root
+        mode: 0755
+        state: directory
+        recurse: yes
+      with_items:
+      - /bin
+      - /sbin
+      - /usr/bin
+      - /usr/sbin
+      - /usr/local/bin
+      - /usr/local/sbin
+
+    - name: |
+        Task - 1.2.2.7.10. - 1.2.2.7.12.
+              Change Library Directory/File Permissions, Owner, and Group
+              ID: V-230260 - ID: V-230261 - ID: V-230262
+      file:
+        path: "{{ item }}"
+        owner: root
+        group: root
+        mode: 0755
+        state: directory
+        recurse: yes
+      with_items:
+      - /lib
+      - /lib64
+      - /usr/lib
+      - /usr/lib64
+
+    - name: Reboot Droplet for Configuration Changes
       reboot:
         reboot_timeout: 600
-
-    - name: CAT 1 STIG Encrypt Root Password - ID V-230235 - (1/20)
-      expect:
-        command: grub2-mkpasswd-pbkdf2
-        responses:
-          Enter password: "{{vaulted_raw_password}}"
-          Reenter password: "{{vaulted_raw_password}}"
-      no_log: true
-    
-    - name: Testing STIG 
-      command: grep -iw grub2_password /boot/grub2/user.cfg
-      register: rootPass
-    - debug: 
-        msg: "(Output must be GRUB2_PASSWORD grub.pbkdf2.sha512.PASSWORD_HASH){{ rootPass.stdout }}"
-      
-    - name: CAT 1 STIG Verify Repository Certificate Signature - ID V-230264 (2/20)
-      shell: egrep '^\[.*\]|gpgcheck' /etc/yum.repos.d/*.repo
-      register: gpgcheck
-    - debug:
-        msg: "{{ gpgcheck.stdout_lines.spit(',') }}"
-    # - name: Output to file
-    #   local_action: copy content="{{ gpgcheck.stdout_line.split(',') }}" dest="~/Locked_LAMP/nodes/gpgcheck.txt"
-
-    - name: Run Test Script.
-      local_action: shell command=./gpgScript.sh
-      register: testResolt
-
-    - debug:
-        msg: "{{ testResolt }}"
-
-    - name: CAT 1 STIG Verify Local Packages Certificate Signature - ID V-230265 (3/20)
-
-    - name: CAT 1 STIG Remove All “shosts.equiv” files - ID V-230283 (4/20)
-    - name: CAT 1 STIG Remove All “.shosts” files - ID V-230284 (5/20)
-    - name: CAT 1 STIG Stop Unattended or Automatic Login - ID V-230329 (6/20)
-    - name: CAT 1 STIG Block Null Passwords - ID V-230380 (7/20)
-    - name: CAT 1 STIG Remove Telnet-Server Packages - ID V-230487 (8/20)
-    - name: CAT 1 STIG Remove RSH-Server Package - ID V-230492 (9/20)
-    - name: CAT 1 STIG Block “ctrl-alt-del” Reboot - ID V-230529 (10/20)
-    - name: CAT 1 STIG Block “ctrl-alt-del” Reboot 7 time in 2 sec - ID V-230531 (11/20)
-    - name: CAT 1 STIG Remove TFTP server - ID V-230533 (12/20)
-    - name: CAT 1 STIG Remove FTP server - ID V-230558 (13/20)
-    - name: CAT 2 STIG Configure Cat 2 STIGs (14/20)
-    - name: CAT 2 STIG Install rsyslog Remote System Log - ID V-230228 (15/20)
-    - name: CAT 2 STIG Passphrase Required for SSH Keys - ID V-230230 (16/20)
-    - name: CAT 2 STIG Encrypt All Stored Passwords - ID V-230231 (17/20)
-    - name: CAT 2 STIG Valid Root Authentication for Rescue/Emergency Mode - ID V-230236 (18/20)
-    - name: CAT 2 STIG Enable and Enforce Secure Enhanced Linux (SELinux) - ID V-230240 (19/20)
-    - name: CAT 2 STIG SSH Connection Timeout - ID V-230244 (20/20)
-    - name: CAT 2 STIG Force the use of TLSv1.2 - ID V-230255 (21/20)
 
 ...
