@@ -14,6 +14,9 @@
     do_token: "{{ lookup('file', '~/DO_Token.txt') }}"
     ssh_key_name: Jacob-Brown-2107
     my_ssh_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+    tag_name: 
+      - Client_Name
+      - Client_Ref_Num
     droplet_name:
       - BrownJ-2107-STIG1
       - BrownJ-2107-STIG2
@@ -41,6 +44,7 @@
         region: nyc1
         unique_name: yes
         image: centos-8-x64
+        tags: "{{ tag_name }}"
         ssh_keys: ["{{ mysshkey.data.ssh_key.id }}"]
       with_items: "{{ droplet_name }}"
       register: droplet_details
